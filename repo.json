@@ -1,8 +1,9 @@
 {
-    "name": "Arab00",
-    "description": "Updating the Cloudstream Arabic Provider. Feel free to join the Cloudstream Discord server for the latest information.",
-    "manifestVersion": 1,
-    "pluginLists": [
-      "https://github.com/1vbah/Arab00/raw/main/plugins.json"
-    ]
-  }
+  "name": "Arab-new",
+  "pluginLists": [
+    {
+      "name": "FaselHD",
+      "pluginUrl": "https://raw.githubusercontent.com/engmyra/Arab-new/main/FaselHD.json"
+    }
+  ]
+}
