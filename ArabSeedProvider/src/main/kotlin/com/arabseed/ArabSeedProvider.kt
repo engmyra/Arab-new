@@ -32,7 +32,7 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-            "$mainUrl/latest1/" to "Latest",  // Now correctly set as "Latest"
+            "$mainUrl/category/مسلسلات-رمضان/ramadan-series-2025/" to "Ramadan 2025",  // Updated Latest Section
             "$mainUrl/movies/?offset=" to "Movies",
             "$mainUrl/series/?offset=" to "Series"
     )
@@ -41,29 +41,16 @@ class ArabSeed : MainAPI() {
             page: Int,
             request: MainPageRequest
     ): HomePageResponse {
+        Log.d("ArabSeed", "Fetching: ${request.data + page}")  // Debugging
         val document = app.get(request.data + page, timeout = 120).document
         val home = document.select("ul.Blocks-UL > div").mapNotNull {
             it.toSearchResponse()
         }
-        return newHomePageResponse(request.name, home)
-    }
-
-    override suspend fun search(query: String): List<SearchResponse> {
-        val list = arrayListOf<SearchResponse>()
-        arrayListOf(
-                "$mainUrl/series/?offset=" to "series",
-                "$mainUrl/movies/?offset=" to "movies",
-                "$mainUrl/latest1/" to "latest"  // Ensure "Latest" is part of the search
-        ).apmap { (url, type) ->
-            val doc = app.post(
-                    "$url/wp-content/themes/Elshaikh2021/Ajaxat/SearchingTwo.php",
-                    data = mapOf("search" to query, "type" to type),
-                    referer = mainUrl
-            ).document
-            doc.select("ul.Blocks-UL > div").mapNotNull {
-                it.toSearchResponse()?.let { it1 -> list.add(it1) }
-            }
+        
+        if (home.isEmpty()) {
+            Log.e("ArabSeed", "No data found for: ${request.name}")
         }
-        return list
+
+        return newHomePageResponse(request.name, home)
     }
 }
