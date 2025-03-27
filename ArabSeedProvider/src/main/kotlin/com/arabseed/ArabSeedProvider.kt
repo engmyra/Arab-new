@@ -32,7 +32,7 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-            "$mainUrl/latest1/" to "Movies",
+            "$mainUrl/latest1/" to "Movies",  // Updated Movies URL
             "$mainUrl/series/?offset=" to "Series",
     )
 
@@ -51,7 +51,7 @@ class ArabSeed : MainAPI() {
         val list = arrayListOf<SearchResponse>()
         arrayListOf(
                 mainUrl to "series",
-                "$mainUrl/latest1/" to "movies"
+                "$mainUrl/latest1/" to "movies"  // Updated Search URL for Movies
         ).apmap { (url, type) ->
             val doc = app.post(
                     "$url/wp-content/themes/Elshaikh2021/Ajaxat/SearchingTwo.php",
@@ -63,82 +63,5 @@ class ArabSeed : MainAPI() {
             }
         }
         return list
-    }
-
-    override suspend fun load(url: String): LoadResponse {
-        val doc = app.get(url, timeout = 5000).document
-        val title = doc.title()
-        val isMovie = title.contains("فيلم")
-
-        val posterUrl = doc.select("div.Poster > img").let{ it.attr("data-src").ifEmpty { it.attr("src") } }
-        val rating = doc.select("div.RatingImdb em").text().getIntFromText()
-        val synopsis = doc.select("p.descrip").last()?.text()
-        val year = doc.select("li:contains(السنه) a").text().getIntFromText()
-        val tags = doc.select("li:contains(النوع) > a, li:contains(التصنيف) > a")?.map { it.text() }
-
-        val actors = doc.select("div.WorkTeamIteM").mapNotNull {
-            val name = it.selectFirst("h4 > em")?.text() ?: return@mapNotNull null
-            val image = it.selectFirst("div.Icon img")?.attr("src") ?: return@mapNotNull null
-            val roleString = it.select("h4 > span").text()
-            val mainActor = Actor(name, image)
-            ActorData(actor = mainActor, roleString = roleString)
-        }
-
-        val recommendations = doc.select("ul.Blocks-UL > div").mapNotNull { element ->
-            element.toSearchResponse()
-        }
-
-        return if (isMovie) {
-            newMovieLoadResponse(
-                    title,
-                    url,
-                    TvType.Movie,
-                    url
-            ) {
-                this.posterUrl = posterUrl
-                this.recommendations = recommendations
-                this.plot = synopsis
-                this.tags = tags
-                this.actors = actors
-                this.rating = rating
-                this.year = year
-            }
-        } else {
-            val seasonList = doc.select("div.SeasonsListHolder ul > li")
-            val episodes = arrayListOf<Episode>()
-            if(seasonList.isNotEmpty()) {
-                seasonList.apmap { season ->
-                    app.post(
-                            "$mainUrl/wp-content/themes/Elshaikh2021/Ajaxat/Single/Episodes.php",
-                            data = mapOf("season" to season.attr("data-season"), "post_id" to season.attr("data-id"))
-                    ).document.select("a").apmap {
-                        episodes.add(Episode(
-                                it.attr("href"),
-                                it.text(),
-                                season.attr("data-season")[0].toString().toIntOrNull(),
-                                it.text().getIntFromText()
-                        ))
-                    }
-                }
-            } else {
-                doc.select("div.ContainerEpisodesList > a").apmap {
-                    episodes.add(Episode(
-                            it.attr("href"),
-                            it.text(),
-                            0,
-                            it.text().getIntFromText()
-                    ))
-                }
-            }
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.distinct().sortedBy { it.data }) {
-                this.posterUrl = posterUrl
-                this.tags = tags
-                this.plot = synopsis
-                this.actors = actors
-                this.recommendations = recommendations
-                this.rating = rating
-                this.year = year
-            }
-        }
     }
 }
