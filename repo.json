@@ -1,16 +1,8 @@
 {
   "name": "Arab New",
   "description": "A plugin for Arab streaming sources",
-  "version": "1.0.0",
-  "maintainer": "engmyra",
-  "source": "https://github.com/engmyra/Arab-new",
-  "plugins": [
-    {
-      "name": "ArabNew",
-      "version": "1.0.0",
-      "apk": "https://github.com/engmyra/Arab-new/releases/download/v1.0.0/ArabNew.apk",
-      "package": "com.engmyra.arabnew",
-      "code": 1
-    }
+  "manifestVersion": 1,
+  "pluginLists": [
+    "https://raw.githubusercontent.com/engmyra/Arab-new/main/plugins.json"
   ]
 }
