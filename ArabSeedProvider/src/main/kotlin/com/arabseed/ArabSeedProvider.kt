@@ -34,7 +34,7 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/category/%D9%85%D8%B3%D9%84%D8%B3%D9%84%D8%A7%D8%AA-%D8%B1%D9%85%D8%B6%D8%A7%D9%86/ramadan-series-2025/" to "Ramadan 2025",
+        "$mainUrl/category/%D9%85%D8%B3%D9%84%D8%B3%D9%84%D8%A7%D8%AA-%D8%B1%D9%85%D8%B6%D8%A7%D9%86/ramadan-series-2025/?offset=" to "Ramadan 2025",
         "$mainUrl/movies/?offset=" to "Movies",
         "$mainUrl/series/?offset=" to "Series"
     )
