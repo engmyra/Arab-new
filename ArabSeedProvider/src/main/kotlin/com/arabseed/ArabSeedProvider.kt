@@ -8,7 +8,7 @@ import android.util.Log
 
 class ArabSeed : MainAPI() {
     override var lang = "ar"
-    override var mainUrl = "https://arabseed.show"
+    override var mainUrl = "https://m15.asd.rest/"
     override var name = "ArabSeed"
     override val usesWebView = false
     override val hasMainPage = true
@@ -17,7 +17,6 @@ class ArabSeed : MainAPI() {
     private fun String.getIntFromText(): Int? {
         return Regex("""\d+""").find(this)?.groupValues?.firstOrNull()?.toIntOrNull()
     }
-
 
     private fun Element.toSearchResponse(): SearchResponse? {
         val title = select("h4").text()
@@ -141,60 +140,5 @@ class ArabSeed : MainAPI() {
                 this.year = year
             }
         }
-    }
-
-    override suspend fun loadLinks(
-            data: String,
-            isCasting: Boolean,
-            subtitleCallback: (SubtitleFile) -> Unit,
-            callback: (ExtractorLink) -> Unit
-    ): Boolean {
-        val doc = app.get(data).document
-        val watchUrl = doc.select("a.watchBTn").attr("href")
-        val watchDoc = app.get(watchUrl, headers = mapOf("Referer" to mainUrl)).document
-        val indexOperators = arrayListOf<Int>()
-        val list: List<Element> = watchDoc.select("ul > li[data-link], ul > h3").mapIndexed { index, element ->
-            if(element.`is`("h3")) {
-                indexOperators.add(index)
-                element
-            } else
-                Log.d("Elements","${element}")
-                element
-        }
-        Log.d("list","${list}")
-        var watchLinks: List<Pair<Int, List<Element>>>;
-        if(indexOperators.isNotEmpty()) {
-            watchLinks = indexOperators.mapIndexed { index, it ->
-                var endIndex = list.size
-                if (index != indexOperators.size - 1) endIndex = (indexOperators[index + 1]) - 1
-                list[it].text().getIntFromText() as Int to list.subList(it + 1, endIndex) as List<Element>
-            }
-        } else {
-            watchLinks = arrayListOf(0 to list)
-        }
-        Log.d("watchLinks","${watchLinks}")
-        watchLinks.apmap { (Quality ,links) ->
-            links.apmap {
-                val iframeUrl = it.attr("data-link")
-                Log.d("iframeUrl","${iframeUrl}")
-                println(iframeUrl)
-                if(it.text().contains("سيد")) {
-                    val sourceElement = app.get(iframeUrl, headers = mapOf("Referer" to mainUrl)).document.select("source")
-                    Log.d("sourceframe","${sourceElement.attr("src")}")
-
-                    callback.invoke(
-                            ExtractorLink(
-                                    this.name,
-                                    "Arab Seed",
-                                    sourceElement.attr("src"),
-                                    data,
-                                    quality = 0
-                            )
-                    )
-                    loadExtractor(iframeUrl, data, subtitleCallback, callback)
-                } else loadExtractor(iframeUrl, data, subtitleCallback, callback)
-            }
-        }
-        return true
     }
 }
