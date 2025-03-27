@@ -33,7 +33,7 @@ class ArabSeed : MainAPI() {
 
     override val mainPage = mainPageOf(
             "$mainUrl/movies/?offset=" to "Movies",
-            "$mainUrl/series/?offset=" to "Series",
+            "$mainUrl/latest1/?offset=" to "Series",
     )
 
     override suspend fun getMainPage(
