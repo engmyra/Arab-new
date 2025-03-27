@@ -36,18 +36,18 @@
     ],
     "version": 12,
     "internalName": "MyCimaProvider",
-    "url": "https://github.com/1vbah/Arab00/raw/main/build/MyCimaProvider.cs3",
+    "url": "https://github.com/engmyra/Arab-new/raw/main/build/MyCimaProvider.cs3",
     "name": "MyCimaProvider"
 },
 {
     "iconUrl": "https://www.google.com/s2/favicons?domain=https://fajer.show&sz=%size%",
     "apiVersion": 1,
-    "repositoryUrl": "https://github.com/1vbah/Arab00",
+    "repositoryUrl": "https://github.com/engmyr/Arab-new",
     "fileSize": 16939,
     "status": 1,
     "language": "ar",
     "authors": [
-        "kingslayer_007"
+        "engmyra"
     ],
     "tvTypes": [
         "TvSeries",
