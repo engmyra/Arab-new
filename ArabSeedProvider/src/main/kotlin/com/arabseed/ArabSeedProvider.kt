@@ -8,7 +8,7 @@ import android.util.Log
 
 class ArabSeed : MainAPI() {
     override var lang = "ar"
-    override var mainUrl = "https://m15.asd.rest/"
+    override var mainUrl = "https://m15.asd.rest"
     override var name = "ArabSeed"
     override val usesWebView = false
     override val hasMainPage = true
@@ -32,7 +32,7 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-            "$mainUrl/latest1/?offset=" to "Movies",
+            "$mainUrl/latest1/" to "Movies",
             "$mainUrl/series/?offset=" to "Series",
     )
 
@@ -51,7 +51,7 @@ class ArabSeed : MainAPI() {
         val list = arrayListOf<SearchResponse>()
         arrayListOf(
                 mainUrl to "series",
-                mainUrl to "movies"
+                "$mainUrl/latest1/" to "movies"
         ).apmap { (url, type) ->
             val doc = app.post(
                     "$url/wp-content/themes/Elshaikh2021/Ajaxat/SearchingTwo.php",
