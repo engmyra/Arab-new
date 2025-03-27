@@ -32,9 +32,9 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-            "$mainUrl/latest1/" to "Movies",
-            "$mainUrl/series/?offset=" to "Series",
-            "$mainUrl/latest1/" to "Latest"  // Added "Latest" section from latest1
+            "$mainUrl/latest1/" to "Latest",  // Now correctly set as "Latest"
+            "$mainUrl/movies/?offset=" to "Movies",
+            "$mainUrl/series/?offset=" to "Series"
     )
 
     override suspend fun getMainPage(
@@ -51,9 +51,9 @@ class ArabSeed : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse> {
         val list = arrayListOf<SearchResponse>()
         arrayListOf(
-                mainUrl to "series",
-                "$mainUrl/latest1/" to "movies",
-                "$mainUrl/latest1/" to "latest"  // Ensure "Latest" is included in search
+                "$mainUrl/series/?offset=" to "series",
+                "$mainUrl/movies/?offset=" to "movies",
+                "$mainUrl/latest1/" to "latest"  // Ensure "Latest" is part of the search
         ).apmap { (url, type) ->
             val doc = app.post(
                     "$url/wp-content/themes/Elshaikh2021/Ajaxat/SearchingTwo.php",
