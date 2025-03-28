@@ -5,7 +5,7 @@ import com.lagradost.cloudstream3.* import com.lagradost.cloudstream3.LoadRespon
 class MyCima : MainAPI() { override var lang = "ar" override var mainUrl = "https://vbn3.t4ce4ma.shop"  // Update this if needed override var name = "MyCima" override val usesWebView = true  // Enable WebView for better compatibility override val hasMainPage = true override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie, TvType.Anime)
 
 private fun String.getImageURL(): String? {
-    return this.replace(".*background-image:url(.*?).*".toRegex(), "$1")
+    return this.replace(".*background-image:url\(.*?)\.*".toRegex(), "$1")
 }
 
 private fun String.getIntFromText(): Int? {
@@ -39,7 +39,9 @@ override val mainPage = mainPageOf(
 )
 
 override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-    val doc = app.get(request.data + page, headers = mapOf("User-Agent" to "Mozilla/5.0")).document
+    Log.d("CloudStream", "Fetching: ${request.data + page}")
+    val doc = app.get(request.data + page, headers = mapOf("User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")).document
+    Log.d("CloudStream", "Response: ${doc.body().text()}")
     val list = doc.select("div.Grid--WecimaPosts div.GridItem").mapNotNull { it.toSearchResponse() }
     return newHomePageResponse(request.name, list)
 }
@@ -52,41 +54,15 @@ override suspend fun search(query: String): List<SearchResponse> {
         "$mainUrl/search/$q/list/series/",
         "$mainUrl/search/$q/list/anime/"
     ).apmap { url ->
-        val doc = app.get(url, headers = mapOf("User-Agent" to "Mozilla/5.0")).document
+        Log.d("CloudStream", "Searching: $url")
+        val doc = app.get(url, headers = mapOf("User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")).document
+        Log.d("CloudStream", "Search Response: ${doc.body().text()}")
         doc.select("div.Grid--WecimaPosts div.GridItem").mapNotNull {
-            if (!it.text().contains("اعلان")) it.toSearchResponse()?.let { res -> result.add(res) }
+            if (it.text().contains("اعلان")) return@mapNotNull null
+            it.toSearchResponse()?.let { result.add(it) }
         }
     }
     return result.distinct().sortedBy { it.name }
-}
-
-override suspend fun load(url: String): LoadResponse {
-    val doc = app.get(url, headers = mapOf("User-Agent" to "Mozilla/5.0")).document
-    val title = doc.select("h1.Title").text()
-    val poster = doc.select("div.Poster img").attr("src")
-    val description = doc.select("div.Description").text()
-    val year = doc.select("div.Year").text().getIntFromText()
-    val type = if (url.contains("movies")) TvType.Movie else TvType.TvSeries
-
-    val sources = mutableListOf<ExtractorLink>()
-    doc.select("iframe").mapNotNull {
-        val iframeUrl = it.attr("src")
-        sources.addAll(loadExtractor(iframeUrl, mainUrl))
-    }
-    
-    return if (type == TvType.Movie) {
-        newMovieLoadResponse(title, url, type, sources).apply {
-            this.posterUrl = poster
-            this.year = year
-            this.plot = description
-        }
-    } else {
-        newTvSeriesLoadResponse(title, url, type, sources).apply {
-            this.posterUrl = poster
-            this.year = year
-            this.plot = description
-        }
-    }
 }
 
 }
