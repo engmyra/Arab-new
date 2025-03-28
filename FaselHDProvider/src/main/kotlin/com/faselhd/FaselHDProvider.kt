@@ -8,7 +8,7 @@ import org.jsoup.nodes.Element
 
 class FaselHD : MainAPI() {
     override var lang = "ar"
-    override var mainUrl = "https://web.faselhd.club" // Update to latest working domain
+    override var mainUrl = "https://w1.faselhdxwatch.top" // Update to latest working domain
     override var name = "FaselHD"
     override val usesWebView = false
     override val hasMainPage = true
