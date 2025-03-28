@@ -5,10 +5,11 @@ import com.lagradost.cloudstream3.network.CloudflareKiller
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.Qualities
 import org.jsoup.nodes.Element
+import org.json.JSONObject
 
 class FaselHD : MainAPI() {
     override var lang = "ar"
-    override var mainUrl = "https://w1.faselhdxwatch.top"
+    override var mainUrl = "https://w1.faselhdxwatch.top"  // Update if needed
     override var name = "FaselHD"
     override val usesWebView = false
     override val hasMainPage = true
@@ -114,36 +115,48 @@ class FaselHD : MainAPI() {
 
             val iframeDoc = app.get(iframeUrl, interceptor = cfKiller, timeout = 120).document
 
-            val mp4Url = iframeDoc.select("source[type=\"video/mp4\"]").attr("src")
-            if (mp4Url.isNotEmpty()) {
-                println("Direct MP4 found: $mp4Url")
-                sources.add(
-                    ExtractorLink(
-                        name = iframeHost,
-                        source = this.name,
-                        url = mp4Url,
-                        referer = mainUrl,
-                        quality = Qualities.Unknown.value
-                    )
-                )
-            } else {
-                val scriptTag = iframeDoc.select("script:containsData(var sources)").html()
-                val extractedVideoUrl = Regex("""["'](https:[^"']+\.(mp4|m3u8))""").find(scriptTag)?.groupValues?.get(1)
-
-                if (!extractedVideoUrl.isNullOrEmpty()) {
-                    println("Extracted from JavaScript: $extractedVideoUrl")
+            // Extract direct MP4 or M3U8 links
+            iframeDoc.select("source").forEach { element ->
+                val videoUrl = element.attr("src")
+                if (videoUrl.endsWith(".mp4") || videoUrl.endsWith(".m3u8")) {
                     sources.add(
                         ExtractorLink(
                             name = iframeHost,
                             source = this.name,
-                            url = extractedVideoUrl,
-                            referer = mainUrl,
-                            quality = Qualities.Unknown.value
+                            url = videoUrl,
+                            referer = iframeUrl,
+                            quality = Qualities.Unknown,
+                            isM3u8 = videoUrl.endsWith(".m3u8")
                         )
                     )
-                } else {
-                    println("⚠ No video links found!")
                 }
+            }
+
+            // Check for JSON-based video sources
+            val scriptTag = iframeDoc.select("script:containsData(var sources)").html()
+            val jsonMatch = Regex("""var sources\s*=\s*(\{.*?\})""").find(scriptTag)
+            jsonMatch?.let {
+                val jsonData = JSONObject(it.groupValues[1])
+                jsonData.keys().forEach { key ->
+                    val jsonUrl = jsonData.getString(key)
+                    if (jsonUrl.startsWith("http")) {
+                        sources.add(
+                            ExtractorLink(
+                                name = iframeHost,
+                                source = this.name,
+                                url = jsonUrl,
+                                referer = iframeUrl,
+                                quality = Qualities.Unknown,
+                                isM3u8 = jsonUrl.endsWith(".m3u8")
+                            )
+                        )
+                    }
+                }
+            }
+
+            // Debugging message
+            if (sources.isEmpty()) {
+                println("⚠ No video links found!")
             }
         }
 
