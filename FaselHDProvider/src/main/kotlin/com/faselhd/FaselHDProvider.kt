@@ -7,6 +7,7 @@ package com.example.faselhd
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import org.jsoup.Jsoup
+import android.util.Log
 
 class FaselhdProvider : MainAPI() {
     override var mainUrl = "https://web184.faselhd.cafe"
@@ -38,47 +39,30 @@ class FaselhdProvider : MainAPI() {
 
         // Extracting video links from iframe or direct links
         val iframeSrc = document.selectFirst("iframe")?.attr("src")
+        var videoUrls: List<String> = listOf()
 
         if (!iframeSrc.isNullOrEmpty()) {
             // Handle iframes
-            try{
+            try {
                 val iframeDoc = app.get(iframeSrc).document
-                val videoLinks = iframeDoc.select("source[src]")
-                videoLinks.forEach { source ->
-                    val videoUrl = source.attr("src")
-                    if (videoUrl.isNotBlank()) {
-                        episodes.add(Episode(videoUrl))
-                    }
-                }
-            } catch (e: Exception){
+                videoUrls = iframeDoc.select("source[src]").mapNotNull { it.attr("src").takeIf { it.isNotBlank() } }
+            } catch (e: Exception) {
                 Log.e("FaselHD", "Error loading iframe: ${e.message}")
-                return newMovieLoadResponse(title, url, TvType.AnimeMovie, episodes) {
-                    this.posterUrl = poster
-                    this.plot = synopsis
-                }
             }
-
         } else {
             // Handle direct links
-            try{
-                val videoLinks = document.select("source[src]")
-                videoLinks.forEach { source ->
-                    val videoUrl = source.attr("src")
-                    if (videoUrl.isNotBlank()) {
-                        episodes.add(Episode(videoUrl))
-                    }
-                }
-            } catch (e: Exception){
+            try {
+                videoUrls = document.select("source[src]").mapNotNull { it.attr("src").takeIf { it.isNotBlank() } }
+            } catch (e: Exception) {
                 Log.e("FaselHD", "Error loading direct links: ${e.message}")
-                return newMovieLoadResponse(title, url, TvType.AnimeMovie, episodes) {
-                    this.posterUrl = poster
-                    this.plot = synopsis
-                }
             }
-
         }
 
-        if (episodes.isEmpty()) {
+        if (videoUrls.isNotEmpty()) {
+            videoUrls.forEach { videoUrl ->
+                episodes.add(Episode(videoUrl))
+            }
+        } else {
             Log.e("FaselHD", "No video links found.")
         }
 
