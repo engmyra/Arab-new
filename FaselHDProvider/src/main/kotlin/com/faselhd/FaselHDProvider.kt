@@ -41,24 +41,45 @@ class FaselhdProvider : MainAPI() {
 
         if (!iframeSrc.isNullOrEmpty()) {
             // Handle iframes
-            val iframeDoc = app.get(iframeSrc).document
-            val videoLinks = iframeDoc.select("source[src]")
-            videoLinks.forEach { source ->
-                val videoUrl = source.attr("src")
-                if (videoUrl.isNotBlank()) {
-                    episodes.add(Episode(videoUrl))
+            try{
+                val iframeDoc = app.get(iframeSrc).document
+                val videoLinks = iframeDoc.select("source[src]")
+                videoLinks.forEach { source ->
+                    val videoUrl = source.attr("src")
+                    if (videoUrl.isNotBlank()) {
+                        episodes.add(Episode(videoUrl))
+                    }
+                }
+            } catch (e: Exception){
+                Log.e("FaselHD", "Error loading iframe: ${e.message}")
+                return newMovieLoadResponse(title, url, TvType.AnimeMovie, episodes) {
+                    this.posterUrl = poster
+                    this.plot = synopsis
                 }
             }
 
         } else {
             // Handle direct links
-             val videoLinks = document.select("source[src]")
-            videoLinks.forEach { source ->
-                val videoUrl = source.attr("src")
-                if (videoUrl.isNotBlank()) {
-                    episodes.add(Episode(videoUrl))
+            try{
+                val videoLinks = document.select("source[src]")
+                videoLinks.forEach { source ->
+                    val videoUrl = source.attr("src")
+                    if (videoUrl.isNotBlank()) {
+                        episodes.add(Episode(videoUrl))
+                    }
+                }
+            } catch (e: Exception){
+                Log.e("FaselHD", "Error loading direct links: ${e.message}")
+                return newMovieLoadResponse(title, url, TvType.AnimeMovie, episodes) {
+                    this.posterUrl = poster
+                    this.plot = synopsis
                 }
             }
+
+        }
+
+        if (episodes.isEmpty()) {
+            Log.e("FaselHD", "No video links found.")
         }
 
         return newMovieLoadResponse(title, url, TvType.AnimeMovie, episodes) {
