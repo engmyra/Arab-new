@@ -1,5 +1,8 @@
 package com.mycima
 
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
@@ -14,7 +17,7 @@ class MyCima : MainAPI() {
     override var lang = "ar"
     override var mainUrl = "https://vbn3.t4ce4ma.shop"
     override var name = "MyCima"
-    override val usesWebView = false  
+    override val usesWebView = true  // Enable WebView to bypass Cloudflare
     override val hasMainPage = false
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie, TvType.Anime)
 
@@ -68,23 +71,35 @@ class MyCima : MainAPI() {
             } catch (e: Exception) {
                 Log.e("CloudStream", "Request failed: ${e.message}")
             }
-            delay(2000)
+            delay(3000)
             attempt++
         }
         return null
     }
 
-    suspend fun getHomePage(): String? {
-        return safeRequest(mainUrl)
-    }
-
-    private fun getRandomUserAgent(): String {
-        val userAgents = listOf(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 15_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Mobile/15E148 Safari/604.1"
-        )
-        return userAgents.random()
+    fun loadWebViewCookies(webView: WebView, url: String, callback: (Map<String, String>) -> Unit) {
+        webView.settings.javaScriptEnabled = true
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                view?.evaluateJavascript(
+                    """
+                    (function() {
+                        let cookies = document.cookie.split('; ');
+                        let cookieObj = {};
+                        cookies.forEach(cookie => {
+                            let parts = cookie.split('=');
+                            cookieObj[parts[0]] = parts[1];
+                        });
+                        return JSON.stringify(cookieObj);
+                    })();
+                    """
+                ) { value ->
+                    val cookies = parseJson<Map<String, String>>(value)
+                    Log.d("WebViewCookies", "Extracted Cookies: $cookies")
+                    callback(cookies)
+                }
+            }
+        }
+        webView.loadUrl(url)
     }
 }
