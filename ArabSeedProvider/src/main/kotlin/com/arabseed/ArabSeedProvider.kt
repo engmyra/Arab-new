@@ -3,8 +3,6 @@ package com.arabseed
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
@@ -15,24 +13,18 @@ class ArabSeed : MainAPI() {
     override var lang = "ar"
     override var mainUrl = "https://m15.asd.rest"
     override var name = "ArabSeed"
-    override val usesWebView = true
+    override val usesWebView = false
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
 
-    // Function to fetch page using WebView (bypassing Cloudflare)
-    private suspend fun loadPageWithWebView(url: String): String = suspendCancellableCoroutine { cont ->
-        val webView = WebView(app)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-        webView.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(view: WebView?, url: String?) {
-                webView.evaluateJavascript("document.documentElement.outerHTML") { html ->
-                    cont.resume(html)
-                }
-            }
+    // Function to extract HTML content
+    private suspend fun fetchHtml(url: String): String {
+        return try {
+            app.get(url, timeout = 120).text
+        } catch (e: Exception) {
+            Log.e("ArabSeed", "Failed to load: $url", e)
+            ""
         }
-        webView.loadUrl(url)
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
@@ -50,21 +42,18 @@ class ArabSeed : MainAPI() {
         }
     }
 
-    override val mainPage = mainPageOf(
-        "$mainUrl/latest1/" to "Latest",  // New "Latest" section
-        "$mainUrl/movies/" to "Movies",
-        "$mainUrl/series/" to "Series"
+    override val mainPage = listOf(
+        HomePageList("Latest", "$mainUrl/latest1/"),
+        HomePageList("Movies", "$mainUrl/movies/"),
+        HomePageList("Series", "$mainUrl/series/")
     )
 
-    override suspend fun getMainPage(
-        page: Int,
-        request: MainPageRequest
-    ): HomePageResponse {
+    override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         Log.d("ArabSeed", "Fetching Page: ${request.data}")
 
-        val html = loadPageWithWebView(request.data)
+        val html = fetchHtml(request.data)
         val document = Jsoup.parse(html)
-        
+
         val selector = if (request.name == "Latest") "ul.Blocks-UL > div, div.latest-item" else "ul.Blocks-UL > div"
         val home = document.select(selector).mapNotNull { it.toSearchResponse() }
 
