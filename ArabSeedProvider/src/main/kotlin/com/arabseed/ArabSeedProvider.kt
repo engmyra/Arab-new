@@ -51,6 +51,7 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
+        "$mainUrl/latest1/?offset=" to "Latest",  // New "Latest" section
         "$mainUrl/category/%D9%85%D8%B3%D9%84%D8%B3%D9%84%D8%A7%D8%AA-%D8%B1%D9%85%D8%B6%D8%A7%D9%86/ramadan-series-2025/?offset=" to "Ramadan 2025",
         "$mainUrl/movies/?offset=" to "Movies",
         "$mainUrl/series/?offset=" to "Series"
@@ -67,38 +68,5 @@ class ArabSeed : MainAPI() {
 
         Log.d("ArabSeed", "Loaded ${home.size} items for ${request.name}")
         return newHomePageResponse(request.name, home)
-    }
-
-    override suspend fun search(query: String): List<SearchResponse> {
-        val list = arrayListOf<SearchResponse>()
-        val searchUrl = "$mainUrl/search?s=$query"
-
-        val html = loadPageWithWebView(searchUrl)
-        val doc = Jsoup.parse(html)
-
-        doc.select("ul.Blocks-UL > div").mapNotNull {
-            it.toSearchResponse()?.let { it1 -> list.add(it1) }
-        }
-
-        return list
-    }
-
-    override suspend fun load(url: String): LoadResponse {
-        val html = loadPageWithWebView(url)
-        val doc = Jsoup.parse(html)
-        val title = doc.title()
-        val isMovie = title.contains("فيلم")
-
-        val posterUrl = doc.select("div.Poster > img").let { it.attr("data-src").ifEmpty { it.attr("src") } }
-        val rating = doc.select("div.RatingImdb em").text().toIntOrNull()
-        val synopsis = doc.select("p.descrip").last()?.text()
-        val year = doc.select("li:contains(السنه) a").text().toIntOrNull()
-        val tags = doc.select("li:contains(النوع) > a, li:contains(التصنيف) > a")?.map { it.text() }
-
-        return if (isMovie) {
-            MovieLoadResponse(title, url, this.name, TvType.Movie, posterUrl, year, synopsis, rating, tags)
-        } else {
-            TvSeriesLoadResponse(title, url, this.name, TvType.TvSeries, posterUrl, year, synopsis, rating, tags)
-        }
     }
 }
