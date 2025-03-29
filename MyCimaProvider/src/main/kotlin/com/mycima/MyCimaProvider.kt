@@ -13,7 +13,7 @@ class MyCima : MainAPI() {
     override var lang = "ar"
     override var mainUrl = "https://vbn3.t4ce4ma.shop"
     override var name = "MyCima"
-    override val usesWebView = true  // WebView helps bypass Cloudflare
+    override val usesWebView = false  // WebView helps bypass Cloudflare
     override val hasMainPage = false
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie, TvType.Anime)
 
