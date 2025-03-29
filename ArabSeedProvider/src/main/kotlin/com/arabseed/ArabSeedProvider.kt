@@ -15,11 +15,21 @@ class ArabSeed : MainAPI() {
     override var lang = "ar"
     override var mainUrl = "https://m15.asd.rest"
     override var name = "ArabSeed"
-    override val usesWebView = true  // Enable WebView for Cloudflare bypass
+    override val usesWebView = true
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
 
-    // Extracting data with WebView to bypass Cloudflare
+    // Alternative method to load pages
+    private suspend fun loadHtml(url: String): String {
+        return try {
+            app.get(url, timeout = 120, headers = mapOf("User-Agent" to "Mozilla/5.0")).text
+        } catch (e: Exception) {
+            Log.e("ArabSeed", "Failed to load: $url", e)
+            loadPageWithWebView(url) // Fallback to WebView
+        }
+    }
+
+    // Extracting data with WebView if needed
     private suspend fun loadPageWithWebView(url: String): String = suspendCancellableCoroutine { cont ->
         val webView = WebView(app)
         webView.settings.javaScriptEnabled = true
@@ -62,9 +72,11 @@ class ArabSeed : MainAPI() {
         request: MainPageRequest
     ): HomePageResponse {
         Log.d("ArabSeed", "Fetching Page: ${request.data + page}")
-        val html = loadPageWithWebView(request.data + page)
+        val html = loadHtml(request.data + page)
         val document = Jsoup.parse(html)
-        val home = document.select("ul.Blocks-UL > div").mapNotNull { it.toSearchResponse() }
+        
+        val selector = if (request.name == "Latest") "ul.Blocks-UL > div, div.latest-item" else "ul.Blocks-UL > div"
+        val home = document.select(selector).mapNotNull { it.toSearchResponse() }
 
         Log.d("ArabSeed", "Loaded ${home.size} items for ${request.name}")
         return newHomePageResponse(request.name, home)
