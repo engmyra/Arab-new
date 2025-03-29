@@ -19,17 +19,7 @@ class ArabSeed : MainAPI() {
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
 
-    // Alternative method to load pages
-    private suspend fun loadHtml(url: String): String {
-        return try {
-            app.get(url, timeout = 120, headers = mapOf("User-Agent" to "Mozilla/5.0")).text
-        } catch (e: Exception) {
-            Log.e("ArabSeed", "Failed to load: $url", e)
-            loadPageWithWebView(url) // Fallback to WebView
-        }
-    }
-
-    // Extracting data with WebView if needed
+    // Function to fetch page using WebView (bypassing Cloudflare)
     private suspend fun loadPageWithWebView(url: String): String = suspendCancellableCoroutine { cont ->
         val webView = WebView(app)
         webView.settings.javaScriptEnabled = true
@@ -61,18 +51,18 @@ class ArabSeed : MainAPI() {
     }
 
     override val mainPage = mainPageOf(
-        "$mainUrl/latest1/?offset=" to "Latest",  // New "Latest" section
-        "$mainUrl/category/%D9%85%D8%B3%D9%84%D8%B3%D9%84%D8%A7%D8%AA-%D8%B1%D9%85%D8%B6%D8%A7%D9%86/ramadan-series-2025/?offset=" to "Ramadan 2025",
-        "$mainUrl/movies/?offset=" to "Movies",
-        "$mainUrl/series/?offset=" to "Series"
+        "$mainUrl/latest1/" to "Latest",  // New "Latest" section
+        "$mainUrl/movies/" to "Movies",
+        "$mainUrl/series/" to "Series"
     )
 
     override suspend fun getMainPage(
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        Log.d("ArabSeed", "Fetching Page: ${request.data + page}")
-        val html = loadHtml(request.data + page)
+        Log.d("ArabSeed", "Fetching Page: ${request.data}")
+
+        val html = loadPageWithWebView(request.data)
         val document = Jsoup.parse(html)
         
         val selector = if (request.name == "Latest") "ul.Blocks-UL > div, div.latest-item" else "ul.Blocks-UL > div"
