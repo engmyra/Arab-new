@@ -3,23 +3,40 @@ package com.arabseed
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import kotlinx.coroutines.suspendCancellableCoroutine
+import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import android.util.Log
+import kotlin.coroutines.resume
 
 class ArabSeed : MainAPI() {
     override var lang = "ar"
-    override var mainUrl = "https://m15.asd.rest"  // Updated Base URL
+    override var mainUrl = "https://m15.asd.rest"
     override var name = "ArabSeed"
-    override val usesWebView = false
+    override val usesWebView = true  // Enable WebView for Cloudflare bypass
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
 
-    private fun String.getIntFromText(): Int? {
-        return Regex("""\d+""").find(this)?.groupValues?.firstOrNull()?.toIntOrNull()
+    // Extracting data with WebView to bypass Cloudflare
+    private suspend fun loadPageWithWebView(url: String): String = suspendCancellableCoroutine { cont ->
+        val webView = WebView(app)
+        webView.settings.javaScriptEnabled = true
+        webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                webView.evaluateJavascript("document.documentElement.outerHTML") { html ->
+                    cont.resume(html)
+                }
+            }
+        }
+        webView.loadUrl(url)
     }
 
     private fun Element.toSearchResponse(): SearchResponse? {
-        val title = select("h4, .Title").text()  // Support different structures
+        val title = select("h4, .Title").text()
         val posterUrl = select("img.imgOptimzer, .Thumbnail img").attr("data-image").ifEmpty {
             select("div.Poster img, .Cover img").attr("data-src")
         }
@@ -43,109 +60,45 @@ class ArabSeed : MainAPI() {
         page: Int,
         request: MainPageRequest
     ): HomePageResponse {
-        Log.d("ArabSeed", "Fetching Page: ${request.data + page}")  // Debug URL being accessed
-
-        val document = app.get(request.data + page, timeout = 120).document
+        Log.d("ArabSeed", "Fetching Page: ${request.data + page}")
+        val html = loadPageWithWebView(request.data + page)
+        val document = Jsoup.parse(html)
         val home = document.select("ul.Blocks-UL > div").mapNotNull { it.toSearchResponse() }
 
-        Log.d("ArabSeed", "Loaded ${home.size} items for ${request.name}")  // Log number of items loaded
+        Log.d("ArabSeed", "Loaded ${home.size} items for ${request.name}")
         return newHomePageResponse(request.name, home)
     }
 
     override suspend fun search(query: String): List<SearchResponse> {
         val list = arrayListOf<SearchResponse>()
-        arrayListOf(
-            mainUrl to "series",
-            mainUrl to "movies"
-        ).apmap { (url, type) ->
-            val doc = app.post(
-                "$url/wp-content/themes/Elshaikh2021/Ajaxat/SearchingTwo.php",
-                data = mapOf("search" to query, "type" to type),
-                referer = mainUrl
-            ).document
-            doc.select("ul.Blocks-UL > div").mapNotNull {
-                it.toSearchResponse()?.let { it1 -> list.add(it1) }
-            }
+        val searchUrl = "$mainUrl/search?s=$query"
+
+        val html = loadPageWithWebView(searchUrl)
+        val doc = Jsoup.parse(html)
+
+        doc.select("ul.Blocks-UL > div").mapNotNull {
+            it.toSearchResponse()?.let { it1 -> list.add(it1) }
         }
+
         return list
     }
 
     override suspend fun load(url: String): LoadResponse {
-        val doc = app.get(url, timeout = 5000).document
+        val html = loadPageWithWebView(url)
+        val doc = Jsoup.parse(html)
         val title = doc.title()
         val isMovie = title.contains("فيلم")
 
         val posterUrl = doc.select("div.Poster > img").let { it.attr("data-src").ifEmpty { it.attr("src") } }
-        val rating = doc.select("div.RatingImdb em").text().getIntFromText()
+        val rating = doc.select("div.RatingImdb em").text().toIntOrNull()
         val synopsis = doc.select("p.descrip").last()?.text()
-        val year = doc.select("li:contains(السنه) a").text().getIntFromText()
+        val year = doc.select("li:contains(السنه) a").text().toIntOrNull()
         val tags = doc.select("li:contains(النوع) > a, li:contains(التصنيف) > a")?.map { it.text() }
 
-        val actors = doc.select("div.WorkTeamIteM").mapNotNull {
-            val name = it.selectFirst("h4 > em")?.text() ?: return@mapNotNull null
-            val image = it.selectFirst("div.Icon img")?.attr("src") ?: return@mapNotNull null
-            val roleString = it.select("h4 > span").text()
-            val mainActor = Actor(name, image)
-            ActorData(actor = mainActor, roleString = roleString)
-        }
-
-        val recommendations = doc.select("ul.Blocks-UL > div").mapNotNull { it.toSearchResponse() }
-
         return if (isMovie) {
-            newMovieLoadResponse(
-                title,
-                url,
-                TvType.Movie,
-                url
-            ) {
-                this.posterUrl = posterUrl
-                this.recommendations = recommendations
-                this.plot = synopsis
-                this.tags = tags
-                this.actors = actors
-                this.rating = rating
-                this.year = year
-            }
+            MovieLoadResponse(title, url, this.name, TvType.Movie, posterUrl, year, synopsis, rating, tags)
         } else {
-            val seasonList = doc.select("div.SeasonsListHolder ul > li")
-            val episodes = arrayListOf<Episode>()
-            if (seasonList.isNotEmpty()) {
-                seasonList.apmap { season ->
-                    app.post(
-                        "$mainUrl/wp-content/themes/Elshaikh2021/Ajaxat/Single/Episodes.php",
-                        data = mapOf("season" to season.attr("data-season"), "post_id" to season.attr("data-id"))
-                    ).document.select("a").apmap {
-                        episodes.add(
-                            Episode(
-                                it.attr("href"),
-                                it.text(),
-                                season.attr("data-season")[0].toString().toIntOrNull(),
-                                it.text().getIntFromText()
-                            )
-                        )
-                    }
-                }
-            } else {
-                doc.select("div.ContainerEpisodesList > a").apmap {
-                    episodes.add(
-                        Episode(
-                            it.attr("href"),
-                            it.text(),
-                            0,
-                            it.text().getIntFromText()
-                        )
-                    )
-                }
-            }
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes.distinct().sortedBy { it.data }) {
-                this.posterUrl = posterUrl
-                this.tags = tags
-                this.plot = synopsis
-                this.actors = actors
-                this.recommendations = recommendations
-                this.rating = rating
-                this.year = year
-            }
+            TvSeriesLoadResponse(title, url, this.name, TvType.TvSeries, posterUrl, year, synopsis, rating, tags)
         }
     }
 }
