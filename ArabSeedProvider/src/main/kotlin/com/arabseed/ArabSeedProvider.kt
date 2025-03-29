@@ -3,11 +3,9 @@ package com.arabseed
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
-import kotlinx.coroutines.suspendCancellableCoroutine
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import android.util.Log
-import kotlin.coroutines.resume
 
 class ArabSeed : MainAPI() {
     override var lang = "ar"
@@ -16,16 +14,6 @@ class ArabSeed : MainAPI() {
     override val usesWebView = false
     override val hasMainPage = true
     override val supportedTypes = setOf(TvType.TvSeries, TvType.Movie)
-
-    // Function to extract HTML content
-    private suspend fun fetchHtml(url: String): String {
-        return try {
-            app.get(url, timeout = 120).text
-        } catch (e: Exception) {
-            Log.e("ArabSeed", "Failed to load: $url", e)
-            ""
-        }
-    }
 
     private fun Element.toSearchResponse(): SearchResponse? {
         val title = select("h4, .Title").text()
@@ -42,22 +30,24 @@ class ArabSeed : MainAPI() {
         }
     }
 
-    override val mainPage = listOf(
-        HomePageList("Latest", "$mainUrl/latest1/"),
-        HomePageList("Movies", "$mainUrl/movies/"),
-        HomePageList("Series", "$mainUrl/series/")
+    override val mainPage = mainPageOf(
+        "$mainUrl/latest1/" to "Latest",
+        "$mainUrl/movies/" to "Movies",
+        "$mainUrl/series/" to "Series"
     )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         Log.d("ArabSeed", "Fetching Page: ${request.data}")
 
-        val html = fetchHtml(request.data)
-        val document = Jsoup.parse(html)
+        val document = app.get(request.data, timeout = 120).document
+        val selector = when (request.name) {
+            "Latest" -> "div.latest-item"  // Adjust this selector if needed
+            else -> "ul.Blocks-UL > div"
+        }
 
-        val selector = if (request.name == "Latest") "ul.Blocks-UL > div, div.latest-item" else "ul.Blocks-UL > div"
         val home = document.select(selector).mapNotNull { it.toSearchResponse() }
-
         Log.d("ArabSeed", "Loaded ${home.size} items for ${request.name}")
+
         return newHomePageResponse(request.name, home)
     }
 }
