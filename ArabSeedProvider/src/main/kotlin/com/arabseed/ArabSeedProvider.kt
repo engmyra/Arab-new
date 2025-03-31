@@ -48,7 +48,7 @@ class ArabSeed : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         Log.d("ArabSeed", "Loading URL: $url")
         val document = app.get(url, timeout = 120).document
-        val title = document.selectFirst("h1, .Title, .post-title")?.text() ?: "No Title"
+        val title = document.selectFirst("h1, .Title, .post-title")?.text() 🙂 "No Title"
         val poster = document.selectFirst("img.Poster, .Cover img, .post-image")?.attr("data-src") ?: ""
         val description = document.selectFirst(".Description p, .post-content p")?.text()
 
@@ -79,52 +79,35 @@ class ArabSeed : MainAPI() {
         Log.d("ArabSeed", "Fetching links for: $data")
         val document = app.get(data, timeout = 120).document
 
+        // Log the full HTML to check structure (for debugging, remove in production)
+        Log.d("ArabSeed", "Page HTML: ${document.html().substring(0, minOf(500, document.html().length))}...")
+
         // Extract server links from containerServers
         val serverItems = document.select(".containerServers ul li")
-        Log.d("ArabSeed", "Found ${serverItems.size} server items")
+        Log.d("ArabSeed", "Found ${serverItems.size} server items in .containerServers")
 
-        if (serverItems.isEmpty()) {
-            Log.w("ArabSeed", "No server links found in .containerServers for: $data")
-            // Fallback to existing logic if no containerServers found
-            val fallbackLinks = document.select("a[href*='gamehub.cam'], a.server-link, iframe[src], .watch-server a")
-            fallbackLinks.forEachIndexed { index, element ->
-                val link = element.attr("href").ifEmpty { element.attr("src") }
-                if (link.isNotBlank()) {
-                    Log.d("ArabSeed", "Processing fallback link $index: $link")
-                    try {
-                        loadExtractor(link, mainUrl, subtitleCallback) { extractorLink ->
-                            callback(extractorLink.copy(name = "Server ${index + 1} - ${extractorLink.name}"))
-                        }
-                    } catch (e: Exception) {
-                        Log.e("ArabSeed", "Error processing fallback link $link: ${e.message}")
-                    }
+        if (serverItems.isNotEmpty()) {
+            serverItems.forEachIndexed { index, item ->
+                val link = item.attr("data-link")
+                Log.d("ArabSeed", "Server $index raw data-link: '$link'")
+
+                if (link.isBlank()) {
+                    Log.w("ArabSeed", "Empty or missing data-link for server item $index: ${item.outerHtml()}")
+                    return@forEachIndexed
                 }
-            }
-            return
-        }
 
-        // Process server links from containerServers
-        serverItems.forEachIndexed { index, item ->
-            val link = item.attr("data-link")
-            if (link.isBlank()) {
-                Log.w("ArabSeed", "Empty data-link for server item $index")
-                return@forEachIndexed
-            }
+                val serverName = item.selectFirst("span")?.text() ?: "Server ${index + 1}"
+                val quality = when {
+                    item.parent()?.previousElementSibling()?.text()?.contains("720") == true -> "720p"
+                    item.parent()?.previousElementSibling()?.text()?.contains("480") == true -> "480p"
+                    else -> "Unknown"
+                }
 
-            val serverName = item.selectFirst("span")?.text() ?: "Server ${index + 1}"
-            val quality = when {
-                item.parent()?.previousElementSibling()?.text()?.contains("720") == true -> "720p"
-                item.parent()?.previousElementSibling()?.text()?.contains("480") == true -> "480p"
-                else -> "Unknown"
-            }
+                Log.d("ArabSeed", "Processing server $index: $serverName ($quality) - $link")
 
-            Log.d("ArabSeed", "Processing server $index: $serverName ($quality) - $link")
-
-            try {
-                // All servers are treated as streaming links via loadExtractor
-                loadExtractor(link, mainUrl, subtitleCallback) { extractorLink ->
-                    callback(
-                        extractorLink.copy(
+                try {
+                    loadExtractor(link, mainUrl, subtitleCallback) { extractorLink ->
+                        val finalLink = extractorLink.copy(
                             name = "$serverName ($quality) - Play",
                             quality = when (quality) {
                                 "720p" -> 720
@@ -132,10 +115,44 @@ class ArabSeed : MainAPI() {
                                 else -> ExtractorLink.QUALITY_UNKNOWN
                             }
                         )
-                    )
+                        Log.d("ArabSeed", "Adding extractor link: ${finalLink.name} -> ${finalLink.url}")
+                        callback(finalLink)
+                    }
+                } catch (e: Exception) {
+                    Log.e("ArabSeed", "Error processing server link $link: ${e.message}", e)
                 }
-            } catch (e: Exception) {
-                Log.e("ArabSeed", "Error processing server link $link: ${e.message}")
+            }
+        } else {
+            Log.w("ArabSeed", "No server links found in .containerServers, trying fallback for: $data")
+            // Fallback to broader selectors
+            val fallbackLinks = document.select(
+                "a[href*='gamehub.cam'], a[href*='vidmoly.to'], a[href*='bigwarp.io'], " +
+                "a[href*='filemoon.sx'], a[href*='voe.sx'], a.server-link, iframe[src], .watch-server a"
+            )
+            Log.d("ArabSeed", "Found ${fallbackLinks.size} fallback links")
+
+            fallbackLinks.forEachIndexed { index, element ->
+                val link = element.attr("href").ifEmpty { element.attr("src") }
+                if (link.isNotBlank()) {
+                    Log.d("ArabSeed", "Processing fallback link $index: $link")
+                    try {
+                        loadExtractor(link, mainUrl, subtitleCallback) { extractorLink ->
+                            val finalLink = extractorLink.copy(
+                                name = "Server ${index + 1} (${
+                                    if (link.contains("720")) "720p" else if (link.contains("480")) "480p" else "Unknown"
+                                }) - Play"
+                            )
+                            Log.d("ArabSeed", "Adding fallback extractor link: ${finalLink.name} -> ${finalLink.url}")
+                            callback(finalLink)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ArabSeed", "Error processing fallback link $link: ${e.message}", e)
+                    }
+                }
+            }
+
+            if (fallbackLinks.isEmpty()) {
+                Log.e("ArabSeed", "No links found at all for: $data")
             }
         }
     }
