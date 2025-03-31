@@ -1,13 +1,13 @@
 version = 3
 
 cloudstream {
-    authors = listOf( "ImZaw" )
+    authors = listOf( "Engmyra" )
 
     language = "ar"
 	
     status = 1
 
-    tvTypes = listOf( "TvSeries" , "Movie" )
+    tvTypes = listOf( "Latest", "TvSeries" , "Movie"  )
 
     iconUrl = "https://www.google.com/s2/favicons?domain=arabseed.ink&sz=%size%"
 }
