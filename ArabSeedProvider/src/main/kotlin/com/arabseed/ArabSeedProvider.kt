@@ -50,7 +50,27 @@ class ArabSeed : MainAPI() {
         val document = app.get(url, timeout = 120).document
         val title = document.selectFirst("h1, .Title, .post-title")?.text() ?: "No Title"
         val poster = document.selectFirst("img.Poster, .Cover img, .post-image")?.attr("data-src") ?: ""
-        val description = document.selectFirst(".Description p, .post-content p")?.text()
+        val description = document.selectFirst(".Description p, .post-content p")?.text() ?: ""
+
+        // Extract server list to include in description
+        val serverItems = document.select(".containerServers ul li")
+        Log.d("ArabSeed", "Found ${serverItems.size} servers during load")
+
+        val serverListText = if (serverItems.isNotEmpty()) {
+            val servers = serverItems.mapIndexed { index, item ->
+                val link = item.attr("data-link").ifEmpty { item.attr("href") }
+                val serverName = item.selectFirst("span")?.text() ?: "Server ${index + 1}"
+                val quality = when {
+                    item.parent()?.previousElementSibling()?.text()?.contains("720") == true -> "720p"
+                    item.parent()?.previousElementSibling()?.text()?.contains("480") == true -> "480p"
+                    else -> "Unknown"
+                }
+                "$serverName ($quality): $link"
+            }.joinToString("\n")
+            "\n\nAvailable Servers:\n$servers"
+        } else {
+            "\n\nNo servers found."
+        }
 
         val isSeries = url.contains("مسلسل") && url.contains("الحلقة")
         return if (isSeries) {
@@ -59,13 +79,13 @@ class ArabSeed : MainAPI() {
             Log.d("ArabSeed", "Detected series with episode: ${episode.name}")
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, listOf(episode)) {
                 this.posterUrl = poster
-                this.plot = description
+                this.plot = description + serverListText
             }
         } else {
             Log.d("ArabSeed", "Detected movie")
             newMovieLoadResponse(title, url, TvType.Movie, url) {
                 this.posterUrl = poster
-                this.plot = description
+                this.plot = description + serverListText
             }
         }
     }
@@ -88,7 +108,7 @@ class ArabSeed : MainAPI() {
 
         if (serverItems.isNotEmpty()) {
             serverItems.forEachIndexed { index, item ->
-                val link = item.attr("data-link").ifEmpty { item.attr("href") } // Fallback to href if data-link is missing
+                val link = item.attr("data-link").ifEmpty { item.attr("href") }
                 Log.d("ArabSeed", "Server $index raw link: '$link'")
 
                 if (link.isBlank()) {
