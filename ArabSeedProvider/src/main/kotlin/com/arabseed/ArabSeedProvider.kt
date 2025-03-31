@@ -48,7 +48,7 @@ class ArabSeed : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         Log.d("ArabSeed", "Loading URL: $url")
         val document = app.get(url, timeout = 120).document
-        val title = document.selectFirst("h1, .Title, .post-title")?.text() 🙂 "No Title"
+        val title = document.selectFirst("h1, .Title, .post-title")?.text() ?: "No Title"
         val poster = document.selectFirst("img.Poster, .Cover img, .post-image")?.attr("data-src") ?: ""
         val description = document.selectFirst(".Description p, .post-content p")?.text()
 
@@ -79,20 +79,20 @@ class ArabSeed : MainAPI() {
         Log.d("ArabSeed", "Fetching links for: $data")
         val document = app.get(data, timeout = 120).document
 
-        // Log the full HTML to check structure (for debugging, remove in production)
-        Log.d("ArabSeed", "Page HTML: ${document.html().substring(0, minOf(500, document.html().length))}...")
+        // Log a snippet of HTML for debugging
+        Log.d("ArabSeed", "Page HTML snippet: ${document.html().substring(0, minOf(500, document.html().length))}...")
 
-        // Extract server links from containerServers
+        // Primary extraction from containerServers
         val serverItems = document.select(".containerServers ul li")
         Log.d("ArabSeed", "Found ${serverItems.size} server items in .containerServers")
 
         if (serverItems.isNotEmpty()) {
             serverItems.forEachIndexed { index, item ->
-                val link = item.attr("data-link")
-                Log.d("ArabSeed", "Server $index raw data-link: '$link'")
+                val link = item.attr("data-link").ifEmpty { item.attr("href") } // Fallback to href if data-link is missing
+                Log.d("ArabSeed", "Server $index raw link: '$link'")
 
                 if (link.isBlank()) {
-                    Log.w("ArabSeed", "Empty or missing data-link for server item $index: ${item.outerHtml()}")
+                    Log.w("ArabSeed", "Empty or missing link for server item $index: ${item.outerHtml()}")
                     return@forEachIndexed
                 }
 
