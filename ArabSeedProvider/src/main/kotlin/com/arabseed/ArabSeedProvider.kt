@@ -52,10 +52,8 @@ class ArabSeed : MainAPI() {
         val poster = document.selectFirst("img.Poster, .Cover img, .post-image")?.attr("data-src") ?: ""
         val description = document.selectFirst(".Description p, .post-content p")?.text()
 
-        // Check if it's a series (URL contains "مسلسل" and "الحلقة")
         val isSeries = url.contains("مسلسل") && url.contains("الحلقة")
         return if (isSeries) {
-            // For series, treat the URL as a single episode for now
             val episodeNumber = url.split('-').last { it.matches(Regex("\\d+")) }
             val episode = Episode(url, "Episode $episodeNumber")
             Log.d("ArabSeed", "Detected series with episode: ${episode.name}")
@@ -81,41 +79,64 @@ class ArabSeed : MainAPI() {
         Log.d("ArabSeed", "Fetching links for: $data")
         val document = app.get(data, timeout = 120).document
 
-        // Look for all server links (e.g., "Watch Now" buttons or iframes)
-        val serverLinks = document.select("a[href*='gamehub.cam'], a.server-link, iframe[src], .watch-server a")
-        Log.d("ArabSeed", "Found ${serverLinks.size} potential server links")
+        // Extract server links from containerServers
+        val serverItems = document.select(".containerServers ul li")
+        Log.d("ArabSeed", "Found ${serverItems.size} server items")
 
-        serverLinks.forEachIndexed { index, element ->
-            val link = element.attr("href").ifEmpty { element.attr("src") }
-            if (link.isNotBlank()) {
-                Log.d("ArabSeed", "Processing server link $index: $link")
-                try {
-                    if (link.contains("gamehub.cam")) {
-                        // Follow the gamehub link to get the embedded video
-                        val gamehubDoc = app.get(link, timeout = 120).document
-                        val videoLink = gamehubDoc.selectFirst("iframe[src], source[src], video[src]")?.attr("src")
-                        if (videoLink.isNullOrBlank()) {
-                            Log.w("ArabSeed", "No video link found in gamehub page for: $link")
-                            return@forEachIndexed
-                        }
-                        Log.d("ArabSeed", "Extracted video link from gamehub: $videoLink")
-                        loadExtractor(videoLink, mainUrl, subtitleCallback) { extractorLink ->
-                            callback(extractorLink.copy(name = "Server ${index + 1} - ${extractorLink.name}"))
-                        }
-                    } else {
-                        // Direct link or iframe
+        if (serverItems.isEmpty()) {
+            Log.w("ArabSeed", "No server links found in .containerServers for: $data")
+            // Fallback to existing logic if no containerServers found
+            val fallbackLinks = document.select("a[href*='gamehub.cam'], a.server-link, iframe[src], .watch-server a")
+            fallbackLinks.forEachIndexed { index, element ->
+                val link = element.attr("href").ifEmpty { element.attr("src") }
+                if (link.isNotBlank()) {
+                    Log.d("ArabSeed", "Processing fallback link $index: $link")
+                    try {
                         loadExtractor(link, mainUrl, subtitleCallback) { extractorLink ->
                             callback(extractorLink.copy(name = "Server ${index + 1} - ${extractorLink.name}"))
                         }
+                    } catch (e: Exception) {
+                        Log.e("ArabSeed", "Error processing fallback link $link: ${e.message}")
                     }
-                } catch (e: Exception) {
-                    Log.e("ArabSeed", "Error processing link $link: ${e.message}")
                 }
             }
+            return
         }
 
-        if (serverLinks.isEmpty()) {
-            Log.w("ArabSeed", "No server links found on page: $data")
+        // Process server links from containerServers
+        serverItems.forEachIndexed { index, item ->
+            val link = item.attr("data-link")
+            if (link.isBlank()) {
+                Log.w("ArabSeed", "Empty data-link for server item $index")
+                return@forEachIndexed
+            }
+
+            val serverName = item.selectFirst("span")?.text() ?: "Server ${index + 1}"
+            val quality = when {
+                item.parent()?.previousElementSibling()?.text()?.contains("720") == true -> "720p"
+                item.parent()?.previousElementSibling()?.text()?.contains("480") == true -> "480p"
+                else -> "Unknown"
+            }
+
+            Log.d("ArabSeed", "Processing server $index: $serverName ($quality) - $link")
+
+            try {
+                // All servers are treated as streaming links via loadExtractor
+                loadExtractor(link, mainUrl, subtitleCallback) { extractorLink ->
+                    callback(
+                        extractorLink.copy(
+                            name = "$serverName ($quality) - Play",
+                            quality = when (quality) {
+                                "720p" -> 720
+                                "480p" -> 480
+                                else -> ExtractorLink.QUALITY_UNKNOWN
+                            }
+                        )
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("ArabSeed", "Error processing server link $link: ${e.message}")
+            }
         }
     }
 }
