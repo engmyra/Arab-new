@@ -48,13 +48,17 @@ class ArabSeed : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         Log.d("ArabSeed", "Loading URL: $url")
         val document = app.get(url, timeout = 120).document
+
+        // Log HTML snippet for debugging
+        Log.d("ArabSeed", "Load HTML snippet: ${document.html().substring(0, minOf(500, document.html().length))}...")
+
         val title = document.selectFirst("h1, .Title, .post-title")?.text() ?: "No Title"
         val poster = document.selectFirst("img.Poster, .Cover img, .post-image")?.attr("data-src") ?: ""
         val description = document.selectFirst(".Description p, .post-content p")?.text() ?: ""
 
         // Extract server list to include in description
         val serverItems = document.select(".containerServers ul li")
-        Log.d("ArabSeed", "Found ${serverItems.size} servers during load")
+        Log.d("ArabSeed", "Found ${serverItems.size} servers during load in .containerServers")
 
         val serverListText = if (serverItems.isNotEmpty()) {
             val servers = serverItems.mapIndexed { index, item ->
@@ -65,12 +69,32 @@ class ArabSeed : MainAPI() {
                     item.parent()?.previousElementSibling()?.text()?.contains("480") == true -> "480p"
                     else -> "Unknown"
                 }
+                Log.d("ArabSeed", "Server $index in load: $serverName ($quality) - $link")
                 "$serverName ($quality): $link"
             }.joinToString("\n")
             "\n\nAvailable Servers:\n$servers"
         } else {
-            "\n\nNo servers found."
+            Log.w("ArabSeed", "No servers found in .containerServers during load, trying fallback")
+            val fallbackServers = document.select(
+                "a[href*='gamehub.cam'], a[href*='vidmoly.to'], a[href*='bigwarp.io'], " +
+                "a[href*='filemoon.sx'], a[href*='voe.sx'], a.server-link, iframe[src], .watch-server a"
+            )
+            Log.d("ArabSeed", "Found ${fallbackServers.size} fallback servers during load")
+            if (fallbackServers.isNotEmpty()) {
+                val servers = fallbackServers.mapIndexed { index, element ->
+                    val link = element.attr("href").ifEmpty { element.attr("src") }
+                    val serverName = element.text().ifEmpty { "Server ${index + 1}" }
+                    val quality = if (link.contains("720")) "720p" else if (link.contains("480")) "480p" else "Unknown"
+                    Log.d("ArabSeed", "Fallback server $index in load: $serverName ($quality) - $link")
+                    "$serverName ($quality): $link"
+                }.joinToString("\n")
+                "\n\nAvailable Servers (Fallback):\n$servers"
+            } else {
+                "\n\nNo servers found."
+            }
         }
+
+        Log.d("ArabSeed", "Final description: $description$serverListText")
 
         val isSeries = url.contains("مسلسل") && url.contains("الحلقة")
         return if (isSeries) {
